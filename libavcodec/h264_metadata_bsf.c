@@ -20,6 +20,7 @@
 #include "libavutil/display.h"
 #include "libavutil/common.h"
 #include "libavutil/opt.h"
+#include "libavutil/time.h"
 
 #include "bsf.h"
 #include "cbs.h"
@@ -468,6 +469,8 @@ static int h264_metadata_handle_display_orientation(AVBSFContext *bsf,
 
     return 0;
 }
+char mark[] = "ts:";
+char result[20];
 
 static int h264_metadata_update_fragment(AVBSFContext *bsf, AVPacket *pkt,
                                          CodedBitstreamFragment *au)
@@ -510,6 +513,14 @@ static int h264_metadata_update_fragment(AVBSFContext *bsf, AVPacket *pkt,
     }
 
     if (ctx->sei_user_data && seek_point) {
+        SEIRawUserDataUnregistered *udu = &ctx->sei_user_data_payload;
+
+        long timestamp = av_gettime() / 1000;
+        sprintf(result, "%s%ld", mark, timestamp);
+        /* av_log(bsf, AV_LOG_ERROR, "%s", result); */
+        udu->data        = result;
+        udu->data_length = strlen(result) + 1;
+
         err = ff_cbs_sei_add_message(ctx->common.output, au, 1,
                                      SEI_TYPE_USER_DATA_UNREGISTERED,
                                      &ctx->sei_user_data_payload, NULL);
@@ -582,6 +593,7 @@ static int h264_metadata_init(AVBSFContext *bsf)
         if (j == 32 && ctx->sei_user_data[i] == '+') {
             udu->data = (uint8_t*)ctx->sei_user_data + i + 1;
             udu->data_length = strlen(udu->data) + 1;
+
         } else {
             av_log(bsf, AV_LOG_ERROR, "Invalid user data: "
                    "must be \"UUID+string\".\n");
